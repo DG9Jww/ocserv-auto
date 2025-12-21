@@ -15,3 +15,12 @@ chmod +x ocserv-install.sh
 ```
 ./ocserv-install.sh
 ```
+
+如果是使用域名，需要自动续签 Let’s Encrypt Certificate
+```
+sudo crontab -e
+```
+写入定时任务
+```
+0 5 * * * certbot renew --quiet && systemctl restart ocserv
+```
