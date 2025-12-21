@@ -2,7 +2,7 @@
 
 下载脚本:
 ```
-https://raw.githubusercontent.com/DG9Jww/ocserv-auto/refs/heads/main/ocserv-install.sh
+curl -O https://raw.githubusercontent.com/DG9Jww/ocserv-auto/refs/heads/main/ocserv-install.sh
 ```
 
 
