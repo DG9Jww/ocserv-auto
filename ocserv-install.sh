@@ -89,6 +89,8 @@ auth = "certificate"
 enable-auth = "plain[passwd=/etc/ocserv/ocpasswd]"
 
 tcp-port = 443
+# udp-port = 443
+# 如果不是BBR加速，则开启UDP速度更快
 run-as-user = ocserv
 run-as-group = ocserv
 socket-file = /var/run/ocserv-socket
@@ -116,6 +118,7 @@ ipv4-netmask = 255.255.255.0
 
 dns = 8.8.8.8
 dns = 1.1.1.1
+# dns加密
 tunnel-all-dns = true
 cisco-client-compat = true
 EOF
