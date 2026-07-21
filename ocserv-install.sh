@@ -1,63 +1,45 @@
 #!/bin/bash
 
 # ==========================================================
-# ocserv Certificate Authentication Installer
+# ocserv 一键安装脚本
+# Cisco Secure Client / AnyConnect
+# 认证方式: 用户名 + 密码
 #
-# Support:
-# Ubuntu 18.04/20.04/22.04
+# Ubuntu 18.04/20.04/22.04/24.04
 # Debian 10+
-#
-# Cisco Secure Client iOS Certificate Authentication
-#
-# No username/password required
 # ==========================================================
 
 
 set -e
 
 
-if [[ $EUID -ne 0 ]]; then
-    echo "Please run as root"
+if [ "$EUID" -ne 0 ]; then
+    echo "请使用 root 运行"
     exit 1
 fi
 
 
-echo "======================================"
-echo " ocserv Certificate VPN Installer"
-echo "======================================"
+echo "===================================="
+echo " OpenConnect VPN Server Installer"
+echo "===================================="
 
 
-# -------------------------------
-# Get public IP
-# -------------------------------
-
-PUBLIC_IP=$(curl -4 -s https://api.ipify.org)
-
-if [ -z "$PUBLIC_IP" ]; then
-    echo "Cannot detect public IP"
-    exit 1
-fi
+PUBLIC_IP=$(curl -s https://api.ipify.org)
 
 
-echo "Public IP: $PUBLIC_IP"
+read -p "VPN用户名: " VPN_USER
+
+read -s -p "VPN密码: " VPN_PASS
+echo
 
 
-# -------------------------------
-# User
-# -------------------------------
+echo ""
+echo "选择服务器证书方式:"
+echo "1) 域名 + Let's Encrypt"
+echo "2) IP地址 + 自签名证书"
 
-read -p "Input VPN certificate username: " VPN_USER
+read -p "请选择 [1-2]: " CERT_MODE
 
-
-if [ -z "$VPN_USER" ]; then
-    echo "Username cannot empty"
-    exit 1
-fi
-
-
-# -------------------------------
-# Install packages
-# -------------------------------
 
 
 apt update
@@ -66,87 +48,57 @@ apt install -y \
 ocserv \
 gnutls-bin \
 iptables \
+certbot \
 curl \
-ufw
-
-
-# -------------------------------
-# Certificate directory
-# -------------------------------
-
-CERT_DIR=/etc/ocserv/certs
-
-mkdir -p $CERT_DIR
-
-cd $CERT_DIR
+openssl
 
 
 
-# ==========================================================
-# Generate CA
-# ==========================================================
-
-
-echo "Generating CA certificate..."
-
-
-cat > ca.tmpl <<EOF
-
-cn = "MyVPN Root CA"
-
-organization = "MyVPN"
-
-serial = 1
-
-expiration_days = 3650
-
-ca
-
-signing_key
-
-cert_signing_key
-
-crl_signing_key
-
-EOF
+mkdir -p /etc/ocserv/certs
 
 
 
-certtool \
---generate-privkey \
---outfile ca-key.pem
+# ------------------------------------------------
+# 服务器证书
+# ------------------------------------------------
 
 
-
-certtool \
---generate-self-signed \
---load-privkey ca-key.pem \
---template ca.tmpl \
---outfile ca-cert.pem
+if [ "$CERT_MODE" = "1" ]; then
 
 
+    read -p "请输入域名: " DOMAIN
+
+    read -p "请输入邮箱: " EMAIL
 
 
-# ==========================================================
-# Server Certificate
-# ==========================================================
+    certbot certonly \
+    --standalone \
+    --agree-tos \
+    --email "$EMAIL" \
+    -d "$DOMAIN" \
+    --non-interactive
 
 
-echo "Generating server certificate..."
+    SERVER_CERT="/etc/letsencrypt/live/$DOMAIN/fullchain.pem"
+    SERVER_KEY="/etc/letsencrypt/live/$DOMAIN/privkey.pem"
 
 
-cat > server.tmpl <<EOF
-
-cn = "$PUBLIC_IP"
-
-organization = "MyVPN"
+else
 
 
-subject_alt_name = IPADDRESS:$PUBLIC_IP
+    DOMAIN="$PUBLIC_IP"
 
+
+    cd /etc/ocserv/certs
+
+
+    cat > server.tmpl <<EOF
+
+cn = $PUBLIC_IP
+
+organization = MyVPN
 
 expiration_days = 3650
-
 
 signing_key
 
@@ -158,104 +110,39 @@ EOF
 
 
 
-certtool \
---generate-privkey \
---outfile server-key.pem
+    certtool \
+    --generate-privkey \
+    --outfile server-key.pem
 
 
 
-certtool \
---generate-certificate \
---load-ca-certificate ca-cert.pem \
---load-ca-privkey ca-key.pem \
---load-privkey server-key.pem \
---template server.tmpl \
---outfile server-cert.pem
+    certtool \
+    --generate-self-signed \
+    --load-privkey server-key.pem \
+    --template server.tmpl \
+    --outfile server-cert.pem
 
 
 
+    SERVER_CERT="/etc/ocserv/certs/server-cert.pem"
 
-# ==========================================================
-# Client Certificate
-# ==========================================================
-
-
-echo "Generating client certificate..."
+    SERVER_KEY="/etc/ocserv/certs/server-key.pem"
 
 
-
-mkdir -p users/$VPN_USER
-
-
-cat > client.tmpl <<EOF
-
-
-cn = "$VPN_USER"
-
-organization = "MyVPN"
-
-unit = "VPN User"
-
-
-expiration_days = 3650
-
-
-signing_key
-
-tls_www_client
-
-
-EOF
+fi
 
 
 
 
-certtool \
---generate-privkey \
---outfile users/$VPN_USER/$VPN_USER-key.pem
-
-
-
-
-certtool \
---generate-certificate \
---load-ca-certificate ca-cert.pem \
---load-ca-privkey ca-key.pem \
---load-privkey users/$VPN_USER/$VPN_USER-key.pem \
---template client.tmpl \
---outfile users/$VPN_USER/$VPN_USER-cert.pem
-
-
-
-# password for p12
-read -s -p "Set certificate password: " P12_PASS
-
-echo
-
-
-
-certtool \
---to-p12 \
---load-privkey users/$VPN_USER/$VPN_USER-key.pem \
---load-certificate users/$VPN_USER/$VPN_USER-cert.pem \
---password "$P12_PASS" \
---outfile /root/${VPN_USER}.p12
-
-
-
-# ==========================================================
-# ocserv config
-# ==========================================================
-
-
-echo "Configuring ocserv..."
-
+# ------------------------------------------------
+# ocserv 配置
+# ------------------------------------------------
 
 
 cat > /etc/ocserv/ocserv.conf <<EOF
 
 
-auth = "certificate"
+auth = "plain[passwd=/etc/ocserv/ocpasswd]"
 
 
 tcp-port = 443
@@ -263,29 +150,32 @@ tcp-port = 443
 udp-port = 443
 
 
+
 run-as-user = ocserv
 
 run-as-group = ocserv
 
 
+
 socket-file = /var/run/ocserv-socket
 
-
-server-cert = $CERT_DIR/server-cert.pem
-
-server-key = $CERT_DIR/server-key.pem
+chroot-dir = /var/lib/ocserv
 
 
-ca-cert = $CERT_DIR/ca-cert.pem
+
+server-cert = $SERVER_CERT
+
+server-key = $SERVER_KEY
 
 
-cert-user-oid = 2.5.4.3
+
+device = vpns
 
 
 
 max-clients = 128
 
-max-same-clients = 2
+max-same-clients = 3
 
 
 
@@ -306,10 +196,6 @@ mobile-idle-timeout = 1800
 
 
 
-default-domain = $PUBLIC_IP
-
-
-
 ipv4-network = 10.10.10.0
 
 ipv4-netmask = 255.255.255.0
@@ -325,6 +211,8 @@ dns = 1.1.1.1
 tunnel-all-dns = true
 
 
+default-domain = $DOMAIN
+
 
 cisco-client-compat = true
 
@@ -334,62 +222,55 @@ EOF
 
 
 
-# ==========================================================
-# Kernel Forward
-# ==========================================================
+# ------------------------------------------------
+# 创建用户
+# ------------------------------------------------
 
 
-cat >/etc/sysctl.d/60-ocserv.conf <<EOF
+touch /etc/ocserv/ocpasswd
+
+
+echo "$VPN_PASS" | \
+ocpasswd \
+-c /etc/ocserv/ocpasswd \
+"$VPN_USER"
+
+
+
+
+# ------------------------------------------------
+# 开启转发
+# ------------------------------------------------
+
+
+cat > /etc/sysctl.d/60-ocserv.conf <<EOF
 
 net.ipv4.ip_forward = 1
 
-EOF
+net.core.default_qdisc=fq
 
-
-
-sysctl -p /etc/sysctl.d/60-ocserv.conf
-
-
-
-
-# ==========================================================
-# Enable BBR
-# ==========================================================
-
-
-if sysctl net.ipv4.tcp_available_congestion_control | grep -q bbr
-then
-
-cat >> /etc/sysctl.d/60-ocserv.conf <<EOF
-
-net.core.default_qdisc = fq
-
-net.ipv4.tcp_congestion_control = bbr
+net.ipv4.tcp_congestion_control=bbr
 
 EOF
 
-sysctl -p /etc/sysctl.d/60-ocserv.conf
 
-fi
-
+sysctl --system
 
 
 
-# ==========================================================
-# Firewall
-# ==========================================================
+# ------------------------------------------------
+# 防火墙 NAT
+# ------------------------------------------------
 
 
-IFACE=$(ip route get 8.8.8.8 | awk '{print $5}')
-
+NIC=$(ip route get 8.8.8.8 | awk '{print $5}')
 
 
 iptables -t nat \
 -A POSTROUTING \
 -s 10.10.10.0/24 \
--o $IFACE \
+-o "$NIC" \
 -j MASQUERADE
-
 
 
 iptables \
@@ -405,24 +286,19 @@ iptables \
 
 
 
-iptables \
--A FORWARD \
--m state \
---state RELATED,ESTABLISHED \
--j ACCEPT
+# 保存iptables
+
+apt install -y iptables-persistent
 
 
-
-ufw allow 443/tcp
-
-ufw allow 443/udp
+netfilter-persistent save
 
 
 
 
-# ==========================================================
-# Start
-# ==========================================================
+# ------------------------------------------------
+# 启动
+# ------------------------------------------------
 
 
 systemctl enable ocserv
@@ -431,45 +307,32 @@ systemctl restart ocserv
 
 
 
-echo
-echo "======================================"
-echo " Installation Finished"
-echo "======================================"
+echo ""
+echo "===================================="
+echo "安装完成"
+echo "===================================="
 
-echo
+echo "服务器:"
+echo "$DOMAIN"
 
-echo "VPN Server:"
-echo "$PUBLIC_IP"
+echo ""
 
+echo "用户名:"
+echo "$VPN_USER"
 
-echo
+echo ""
 
-echo "Client:"
-echo "/root/${VPN_USER}.p12"
-
-
-echo
-
-echo "CA certificate:"
-echo "$CERT_DIR/ca-cert.pem"
+echo "密码:"
+echo "$VPN_PASS"
 
 
-echo
+echo ""
 
-echo "Certificate Password:"
-echo "$P12_PASS"
+echo "Cisco Secure Client:"
+echo "AnyConnect VPN"
+echo "地址: $DOMAIN"
 
+echo "认证方式:"
+echo "Username + Password"
 
-echo
-
-echo "Import to iPhone:"
-echo "1. Install ca-cert.pem"
-echo "2. Install ${VPN_USER}.p12"
-echo "3. Open Cisco Secure Client"
-echo "4. Connect to $PUBLIC_IP"
-
-
-echo
-
-echo "Check service:"
-echo "systemctl status ocserv"
+echo "===================================="
