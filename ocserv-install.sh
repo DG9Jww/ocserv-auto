@@ -149,6 +149,8 @@ certbot certonly \
 --standalone \
 --preferred-profile shortlived \
 --ip-address "$PUBLIC_IP"
+--agree-tos \
+--non-interactive
 
 
 
