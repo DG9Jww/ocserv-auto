@@ -69,7 +69,7 @@ apt install -y \
 curl \
 snapd \
 iptables \
-iptables-persistent \
+# iptables-persistent \
 ocserv \
 gnutls-bin
 
@@ -374,7 +374,7 @@ iptables \
 
 
 
-netfilter-persistent save
+# netfilter-persistent save
 
 
 
