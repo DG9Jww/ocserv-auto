@@ -140,7 +140,10 @@ systemctl stop ocserv || true
 
 
 echo "申请 Let's Encrypt IP Certificate"
-
+echo "请确保安全组开放:"
+echo "TCP 80"
+echo "TCP 443"
+echo "UDP 443"
 
 certbot certonly \
 --standalone \
@@ -391,9 +394,7 @@ Description=Renew Let's Encrypt IP certificate for ocserv
 
 Type=oneshot
 
-ExecStart=/usr/bin/certbot renew --quiet
-
-ExecStartPost=/bin/systemctl restart ocserv
+ExecStart=/bin/bash -c '/usr/bin/certbot renew --quiet --deploy-hook "systemctl restart ocserv"'
 
 EOF
 
