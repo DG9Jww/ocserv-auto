@@ -223,7 +223,7 @@ run-as-group = ocserv
 
 socket-file = /var/run/ocserv-socket
 
-
+use-occtl = true
 
 device = vpns
 
