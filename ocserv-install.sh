@@ -149,7 +149,7 @@ echo "UDP 443"
 certbot certonly \
 --standalone \
 --preferred-profile shortlived \
---ip-address "$PUBLIC_IP"
+--ip-address "$PUBLIC_IP" \
 --agree-tos \
 --non-interactive
 
