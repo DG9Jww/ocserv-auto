@@ -76,28 +76,50 @@ gnutls-bin
 
 
 # -------------------------------
-# 安装新版 certbot, 由于老版certbot
-# 不支持签发IP地址，且一些系统默认安装
-# 的版本较老，所以这样安装新版本。
+# 安装新版 certbot
 # -------------------------------
 
 
-if ! command -v certbot >/dev/null
+if command -v certbot >/dev/null
 then
+
+    echo "certbot already installed"
+
+else
+
+    apt update
+    apt install -y certbot
+
+fi
+
+
+if ! certbot help | grep -q "ip-address"
+then
+
+    echo "Current certbot does not support IP certificate"
+    echo "Installing latest certbot using snap"
+
+
+    apt remove -y certbot || true
+
+
+    apt install -y snapd
+
 
     snap install core
 
     snap refresh core
 
+
     snap install --classic certbot
+
 
     ln -sf /snap/bin/certbot /usr/bin/certbot
 
 fi
 
 
-
-echo "certbot版本:"
+echo "certbot version:"
 certbot --version
 
 
