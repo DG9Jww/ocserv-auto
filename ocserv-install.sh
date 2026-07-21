@@ -406,13 +406,13 @@ cat > /etc/systemd/system/ocserv-cert-renew.timer <<EOF
 
 [Unit]
 
-Description=Daily certbot renew
+Description= Certbot renew every three days
 
 
 
 [Timer]
 
-OnCalendar=daily
+OnCalendar=*-*-*/3 03:00:00
 
 Persistent=true
 
