@@ -1,12 +1,18 @@
 #!/bin/bash
 
 # ==========================================================
-# ocserv 一键安装脚本
-# Cisco Secure Client / AnyConnect
-# 认证方式: 用户名 + 密码
+# ocserv + Cisco Secure Client 自动部署
 #
-# Ubuntu 18.04/20.04/22.04/24.04
-# Debian 10+
+# 认证:
+#   Username + Password
+#
+# 证书:
+#   Let's Encrypt IP Certificate
+#
+# 支持:
+#   Ubuntu 22.04/24.04
+#   Debian 11/12
+#
 # ==========================================================
 
 
@@ -14,141 +20,171 @@ set -e
 
 
 if [ "$EUID" -ne 0 ]; then
-    echo "请使用 root 运行"
+    echo "请使用 root 执行"
     exit 1
 fi
 
 
-echo "===================================="
-echo " OpenConnect VPN Server Installer"
-echo "===================================="
+echo "======================================"
+echo " ocserv VPN Auto Installer"
+echo " Cisco Secure Client Compatible"
+echo "======================================"
 
 
-PUBLIC_IP=$(curl -s https://api.ipify.org)
+# -------------------------------
+# 基础信息
+# -------------------------------
+
+
+PUBLIC_IP=$(curl -4 -s https://api.ipify.org)
+
+
+if [ -z "$PUBLIC_IP" ]; then
+    echo "无法获取公网IP"
+    exit 1
+fi
+
+
+echo "检测公网IP:"
+echo "$PUBLIC_IP"
 
 
 read -p "VPN用户名: " VPN_USER
+
 
 read -s -p "VPN密码: " VPN_PASS
 echo
 
 
-echo ""
-echo "选择服务器证书方式:"
-echo "1) 域名 + Let's Encrypt"
-echo "2) IP地址 + 自签名证书"
 
-read -p "请选择 [1-2]: " CERT_MODE
-
+# -------------------------------
+# 安装依赖
+# -------------------------------
 
 
 apt update
 
+
 apt install -y \
-ocserv \
-gnutls-bin \
-iptables \
-certbot \
 curl \
-openssl
+snapd \
+iptables \
+iptables-persistent \
+ocserv \
+gnutls-bin
 
 
 
-mkdir -p /etc/ocserv/certs
+# -------------------------------
+# 安装新版 certbot, 由于老版certbot
+# 不支持签发IP地址，且一些系统默认安装
+# 的版本较老，所以这样安装新版本。
+# -------------------------------
 
 
+if ! command -v certbot >/dev/null
+then
 
-# ------------------------------------------------
-# 服务器证书
-# ------------------------------------------------
+    snap install core
 
+    snap refresh core
 
-if [ "$CERT_MODE" = "1" ]; then
+    snap install --classic certbot
 
-
-    read -p "请输入域名: " DOMAIN
-
-    read -p "请输入邮箱: " EMAIL
-
-
-    certbot certonly \
-    --standalone \
-    --agree-tos \
-    --email "$EMAIL" \
-    -d "$DOMAIN" \
-    --non-interactive
-
-
-    SERVER_CERT="/etc/letsencrypt/live/$DOMAIN/fullchain.pem"
-    SERVER_KEY="/etc/letsencrypt/live/$DOMAIN/privkey.pem"
-
-
-else
-
-
-    DOMAIN="$PUBLIC_IP"
-
-
-    cd /etc/ocserv/certs
-
-
-    cat > server.tmpl <<EOF
-
-cn = $PUBLIC_IP
-
-organization = MyVPN
-
-expiration_days = 3650
-
-signing_key
-
-encryption_key
-
-tls_www_server
-
-EOF
-
-
-
-    certtool \
-    --generate-privkey \
-    --outfile server-key.pem
-
-
-
-    certtool \
-    --generate-self-signed \
-    --load-privkey server-key.pem \
-    --template server.tmpl \
-    --outfile server-cert.pem
-
-
-
-    SERVER_CERT="/etc/ocserv/certs/server-cert.pem"
-
-    SERVER_KEY="/etc/ocserv/certs/server-key.pem"
-
+    ln -sf /snap/bin/certbot /usr/bin/certbot
 
 fi
 
 
 
+echo "certbot版本:"
+certbot --version
 
-# ------------------------------------------------
-# ocserv 配置
-# ------------------------------------------------
+
+
+# -------------------------------
+# 停止ocserv
+# 避免443冲突
+# -------------------------------
+
+
+systemctl stop ocserv || true
+
+
+
+# -------------------------------
+# 申请 Let's Encrypt IP证书
+# -------------------------------
+
+
+echo "申请 Let's Encrypt IP Certificate"
+
+
+certbot certonly \
+--standalone \
+--preferred-profile shortlived \
+--ip-address "$PUBLIC_IP"
+
+
+
+CERT_DIR="/etc/letsencrypt/live/$PUBLIC_IP"
+
+
+SERVER_CERT="$CERT_DIR/fullchain.pem"
+
+SERVER_KEY="$CERT_DIR/privkey.pem"
+
+
+
+if [ ! -f "$SERVER_CERT" ]; then
+
+    echo "证书申请失败"
+
+    exit 1
+
+fi
+
+
+
+echo "证书:"
+echo "$SERVER_CERT"
+
+
+
+# -------------------------------
+# 配置 ocserv
+# -------------------------------
+
+
+mkdir -p /etc/ocserv
 
 
 cat > /etc/ocserv/ocserv.conf <<EOF
 
 
+# ==============================
+# Authentication
+# ==============================
+
+
 auth = "plain[passwd=/etc/ocserv/ocpasswd]"
+
+
+
+# ==============================
+# Listen
+# ==============================
 
 
 tcp-port = 443
 
 udp-port = 443
 
+
+
+# ==============================
+# Runtime
+# ==============================
 
 
 run-as-user = ocserv
@@ -161,20 +197,34 @@ socket-file = /var/run/ocserv-socket
 
 
 
+device = vpns
+
+
+
+# 不使用chroot
+# 避免socket路径问题
+
+
+
+# ==============================
+# Certificate
+# ==============================
+
+
 server-cert = $SERVER_CERT
 
 server-key = $SERVER_KEY
 
 
 
-device = vpns
-
+# ==============================
+# Session
+# ==============================
 
 
 max-clients = 128
 
-max-same-clients = 3
-
+max-same-clients = 2
 
 
 keepalive = 30
@@ -184,7 +234,6 @@ dpd = 90
 mobile-dpd = 300
 
 
-
 try-mtu-discovery = true
 
 
@@ -192,6 +241,11 @@ idle-timeout = 1200
 
 mobile-idle-timeout = 1800
 
+
+
+# ==============================
+# Network
+# ==============================
 
 
 ipv4-network = 10.10.10.0
@@ -209,8 +263,12 @@ dns = 1.1.1.1
 tunnel-all-dns = true
 
 
-default-domain = $DOMAIN
 
+default-domain = $PUBLIC_IP
+
+
+
+# Cisco compatibility
 
 cisco-client-compat = true
 
@@ -220,9 +278,9 @@ EOF
 
 
 
-# ------------------------------------------------
-# 创建用户
-# ------------------------------------------------
+# -------------------------------
+# 创建VPN用户
+# -------------------------------
 
 
 touch /etc/ocserv/ocpasswd
@@ -236,32 +294,35 @@ ocpasswd \
 
 
 
-# ------------------------------------------------
-# 开启转发
-# ------------------------------------------------
+# -------------------------------
+# 开启IP Forward
+# -------------------------------
 
 
 cat > /etc/sysctl.d/60-ocserv.conf <<EOF
 
 net.ipv4.ip_forward = 1
 
-net.core.default_qdisc=fq
+net.core.default_qdisc = fq
 
-net.ipv4.tcp_congestion_control=bbr
+net.ipv4.tcp_congestion_control = bbr
 
 EOF
+
 
 
 sysctl --system
 
 
 
-# ------------------------------------------------
-# 防火墙 NAT
-# ------------------------------------------------
+
+# -------------------------------
+# NAT
+# -------------------------------
 
 
 NIC=$(ip route get 8.8.8.8 | awk '{print $5}')
+
 
 
 iptables -t nat \
@@ -271,10 +332,12 @@ iptables -t nat \
 -j MASQUERADE
 
 
+
 iptables \
 -A FORWARD \
 -s 10.10.10.0/24 \
 -j ACCEPT
+
 
 
 iptables \
@@ -284,53 +347,117 @@ iptables \
 
 
 
-# 保存iptables
-
-apt install -y iptables-persistent
-
-
 netfilter-persistent save
 
 
 
 
-# ------------------------------------------------
-# 启动
-# ------------------------------------------------
+# -------------------------------
+# 自动续期
+# -------------------------------
+
+
+cat > /etc/systemd/system/ocserv-cert-renew.service <<EOF
+
+[Unit]
+
+Description=Renew Let's Encrypt IP certificate for ocserv
+
+
+
+[Service]
+
+Type=oneshot
+
+ExecStart=/usr/bin/certbot renew --quiet
+
+ExecStartPost=/bin/systemctl restart ocserv
+
+EOF
+
+
+
+cat > /etc/systemd/system/ocserv-cert-renew.timer <<EOF
+
+[Unit]
+
+Description=Daily certbot renew
+
+
+
+[Timer]
+
+OnCalendar=daily
+
+Persistent=true
+
+
+
+[Install]
+
+WantedBy=timers.target
+
+EOF
+
+
+
+systemctl daemon-reload
+
+
+systemctl enable ocserv-cert-renew.timer
+
+systemctl start ocserv-cert-renew.timer
+
+
+
+
+# -------------------------------
+# 启动ocserv
+# -------------------------------
 
 
 systemctl enable ocserv
+
 
 systemctl restart ocserv
 
 
 
-echo ""
-echo "===================================="
-echo "安装完成"
-echo "===================================="
 
-echo "服务器:"
-echo "$DOMAIN"
+echo ""
+echo "======================================"
+echo " 安装完成"
+echo "======================================"
 
 echo ""
 
-echo "用户名:"
+echo "Cisco Secure Client:"
+echo ""
+
+echo "Server:"
+echo "$PUBLIC_IP"
+
+echo ""
+
+echo "Username:"
 echo "$VPN_USER"
 
 echo ""
 
-echo "密码:"
+echo "Password:"
 echo "$VPN_PASS"
 
 
 echo ""
 
-echo "Cisco Secure Client:"
-echo "AnyConnect VPN"
-echo "地址: $DOMAIN"
-
 echo "认证方式:"
 echo "Username + Password"
 
-echo "===================================="
+
+echo ""
+
+echo "检查状态:"
+echo "systemctl status ocserv"
+
+
+echo "======================================"
