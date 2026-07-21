@@ -159,8 +159,6 @@ run-as-group = ocserv
 
 socket-file = /var/run/ocserv-socket
 
-chroot-dir = /var/lib/ocserv
-
 
 
 server-cert = $SERVER_CERT
