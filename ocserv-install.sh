@@ -69,9 +69,10 @@ apt install -y \
 curl \
 snapd \
 iptables \
-# iptables-persistent \
 ocserv \
 gnutls-bin
+# iptables-persistent 
+
 
 
 
