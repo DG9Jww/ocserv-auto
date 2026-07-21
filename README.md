@@ -16,11 +16,15 @@ chmod +x ocserv-install.sh
 ./ocserv-install.sh
 ```
 
-如果是使用域名，需要自动续签 Let’s Encrypt Certificate
-```
-sudo crontab -e
-```
-写入定时任务
-```
-0 5 * * * certbot renew --quiet && systemctl restart ocserv
-```
+*添加用户*
+`ocpasswd -c /etc/ocserv/ocpasswd newuser`
+提示输入密码即可
+
+*修改密码*
+修改密码和添加用户使用同样的命令,输入的密码为新密码
+
+*删除用户*
+`ocpasswd -c /etc/ocserv/ocpasswd -d user1`
+
+*查看已有用户*
+`cat /etc/ocserv/ocpasswd`
