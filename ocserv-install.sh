@@ -397,7 +397,8 @@ Description=Renew Let's Encrypt IP certificate for ocserv
 
 Type=oneshot
 
-ExecStart=/bin/bash -c '/usr/bin/certbot renew --quiet --deploy-hook "systemctl restart ocserv"'
+ExecStart=/usr/bin/certbot renew --quiet
+ExecStartPost=/bin/systemctl restart ocserv
 
 EOF
 
