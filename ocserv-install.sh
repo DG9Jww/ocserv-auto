@@ -411,8 +411,7 @@ Description= Certbot renew every three days
 
 
 [Timer]
-OnBootSec=10min
-OnUnitActiveSec=3d
+OnCalendar=daily
 Persistent=true
 
 
