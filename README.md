@@ -28,3 +28,9 @@ chmod +x ocserv-install.sh
 
 **查看已有用户**   
 `cat /etc/ocserv/ocpasswd`
+
+**查看服务器当前提供的证书**
+`openssl x509 -in /etc/letsencrypt/live/*/fullchain.pem -noout -dates`
+
+**certbot check validation of certification**
+`certbot certificates`
