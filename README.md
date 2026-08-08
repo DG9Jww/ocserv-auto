@@ -36,4 +36,4 @@ chmod +x ocserv-install.sh
 `certbot certificates` 
 
 **Check the certificate that ocserv is using** 
-`echo | openssl s_client -connect 13.228.25.141:443 2>/dev/null | openssl x509 -noout -dates` 
+`echo | openssl s_client -connect <ipaddr>:<port> 2>/dev/null | openssl x509 -noout -dates` 
