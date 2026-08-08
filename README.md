@@ -35,5 +35,8 @@ chmod +x ocserv-install.sh
 **certbot check validation of certification**  
 `certbot certificates` 
 
-**Check the certificate that ocserv is using** 
+**Check the certificate that ocserv is using**  
 `echo | openssl s_client -connect <ipaddr>:<port> 2>/dev/null | openssl x509 -noout -dates` 
+
+**Check the ocserv running log**  
+`journalctl -u ocserv --since "10 minutes ago"`
