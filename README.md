@@ -29,14 +29,20 @@ chmod +x ocserv-install.sh
 **查看已有用户**   
 `cat /etc/ocserv/ocpasswd`
 
-**查看服务器当前提供的证书** 
+**查看服务器当前提供的证书**  
 `openssl x509 -in /etc/letsencrypt/live/*/fullchain.pem -noout -dates` 
 
-**certbot check validation of certification**  
+**Show online users**   
+`occtl show users`
+
+**Disconnect online users**   
+`occtl disconnect id 5208`
+
+**Certbot check validation of certification**   
 `certbot certificates` 
 
-**Check the certificate that ocserv is using**  
+**Check the certificate that ocserv is using**   
 `echo | openssl s_client -connect <ipaddr>:<port> 2>/dev/null | openssl x509 -noout -dates` 
 
-**Check the ocserv running log**  
+**Check the ocserv running log**   
 `journalctl -u ocserv --since "10 minutes ago"`
