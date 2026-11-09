@@ -134,6 +134,19 @@ certbot --version
 systemctl stop ocserv || true
 
 
+# -------------------------------
+# Open Firewall
+# -------------------------------
+
+
+# Allow TCP 80, 443 and UDP 443
+
+for PORT in 80 443; do
+    iptables -C INPUT -p tcp --dport "$PORT" -j ACCEPT 2>/dev/null || iptables -I INPUT 1 -p tcp --dport "$PORT" -j ACCEPT
+done
+
+iptables -C INPUT -p udp --dport 443 -j ACCEPT 2>/dev/null || iptables -I INPUT 1 -p udp --dport 443 -j ACCEP
+
 
 # -------------------------------
 # 申请 Let's Encrypt IP证书
@@ -254,21 +267,15 @@ max-clients = 128
 
 max-same-clients = 2
 
-
 keepalive = 30
 
 dpd = 90
-
 mobile-dpd = 300
-
 
 try-mtu-discovery = true
 
-
-idle-timeout = 1200
-
-mobile-idle-timeout = 1800
-
+#idle-timeout = 1200
+#mobile-idle-timeout = 1800
 
 
 # ==============================
@@ -323,7 +330,7 @@ ocpasswd \
 
 
 # -------------------------------
-# 开启IP Forward
+# Enable IP Forward
 # -------------------------------
 
 
@@ -338,44 +345,28 @@ net.ipv4.tcp_congestion_control = bbr
 EOF
 
 
-
 sysctl --system
 
 
 
 
 # -------------------------------
-# NAT
+# Firewall & NAT
 # -------------------------------
 
 
-NIC=$(ip route get 8.8.8.8 | awk '{print $5}')
+NIC=$(ip route get 8.8.8.8 | awk '{for(i=1;i<=NF;i++) if($i=="dev"){print $(i+1); exit}}')
 
+# Allow VPN forwarding before Oracle's REJECT rule
+iptables -I FORWARD 1 -s 10.10.10.0/24 -o "$NIC" -j ACCEPT
+iptables -I FORWARD 2 -d 10.10.10.0/24 -i "$NIC" -m conntrack --ctstate RELATED,ESTABLISHED -j ACCEPT
 
+# NAT
+iptables -t nat -C POSTROUTING -s 10.10.10.0/24 -o "$NIC" -j MASQUERADE 2>/dev/null || iptables -t nat -A POSTROUTING -s 10.10.10.0/24 -o "$NIC" -j MASQUERADE
 
-iptables -t nat \
--A POSTROUTING \
--s 10.10.10.0/24 \
--o "$NIC" \
--j MASQUERADE
-
-
-
-iptables \
--A FORWARD \
--s 10.10.10.0/24 \
--j ACCEPT
-
-
-
-iptables \
--A FORWARD \
--d 10.10.10.0/24 \
--j ACCEPT
-
-
-
-# netfilter-persistent save
+# Save iptables rules
+mkdir -p /etc/iptables
+iptables-save > /etc/iptables/rules.v4
 
 
 
