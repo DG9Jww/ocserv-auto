@@ -272,6 +272,7 @@ keepalive = 30
 dpd = 90
 mobile-dpd = 300
 
+mtu = 1496
 try-mtu-discovery = true
 
 #idle-timeout = 1200
