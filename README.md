@@ -38,6 +38,15 @@ chmod +x ocserv-install.sh
 **Disconnect online users**   
 `occtl disconnect id 5208`
 
+**Show banned IP**   
+`occtl show ip bans`
+
+**Remove banned IP**   
+`occtl unban ip <banned ip>`
+
+**Show potential malicious IP**   
+`occtl show ip ban points`
+
 **Certbot check validation of certification**   
 `certbot certificates` 
 
