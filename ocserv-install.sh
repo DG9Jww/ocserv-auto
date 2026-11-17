@@ -265,15 +265,20 @@ server-key = $SERVER_KEY
 
 max-clients = 128
 
-max-same-clients = 2
+max-same-clients = 3
 
 keepalive = 30
 
 dpd = 90
 mobile-dpd = 300
 
+# 亲测mtu = 1496 连接更稳定，也有人测1200更稳定，改为1200可添加下方自定义头
 mtu = 1496
 try-mtu-discovery = true
+# ==== ocserv 1.5.0 Custom Headers Optimization ====
+# Force clients to lock MTU to 1200, preventing DTLS handshake failures and packet drop
+# custom-header = "X-DTLS-MTU: 1200"
+# custom-header = "X-CSTP-MTU: 1200"
 
 #idle-timeout = 1200
 #mobile-idle-timeout = 1800
